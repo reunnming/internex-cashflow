@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Internex — Cash Flow</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1a3a5c;--navy2:#243f5f;
+  --green:#1a9c5a;--green-lt:#e8f8f0;
+  --red:#d63031;--red-lt:#fdecea;
+  --amber:#e67e22;--amber-lt:#fef5e7;
+  --blue:#2471a3;--blue-lt:#eaf2fb;
+  --purple:#7d3c98;--purple-lt:#f5eef8;
+  --gray:#6b7c8d;--border:#e2e8f0;
+  --bg:#f0f4f8;--white:#fff;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:#1a2b3c;min-height:100vh}
+
+/* ── Top bar ── */
+.topbar{background:var(--navy);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.topbar h1{font-size:1.1rem;font-weight:700;letter-spacing:.3px;margin-right:auto}
+.synced{font-size:.72rem;opacity:.7}
+.refresh{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.75rem;transition:.15s}
+.refresh:hover{background:rgba(255,255,255,.22)}
+
+/* ── Month tabs ── */
+.month-bar{background:var(--navy2);padding:0 28px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.month-bar::-webkit-scrollbar{display:none}
+.mtab{padding:10px 18px;font-size:.78rem;font-weight:600;color:rgba(255,255,255,.55);cursor:pointer;border-bottom:3px solid transparent;transition:.15s;white-space:nowrap}
+.mtab:hover{color:rgba(255,255,255,.85)}
+.mtab.active{color:#fff;border-bottom-color:#f9ca24}
+.mtab.total-tab{border-right:1px solid rgba(255,255,255,.15);margin-right:4px;color:rgba(255,255,255,.75)}
+.mtab.total-tab.active{color:#f9ca24}
+
+/* ── Hero KPI row ── */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;padding:20px 28px 0}
+.kpi{background:var(--white);border-radius:10px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-top:4px solid var(--border);position:relative;overflow:hidden}
+.kpi.green{border-top-color:var(--green)}
+.kpi.red{border-top-color:var(--red)}
+.kpi.blue{border-top-color:var(--blue)}
+.kpi.amber{border-top-color:var(--amber)}
+.kpi.purple{border-top-color:var(--purple)}
+.kpi.navy{border-top-color:var(--navy)}
+.kpi label{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--gray);font-weight:700}
+.kpi .val{font-size:1.45rem;font-weight:800;margin-top:5px;letter-spacing:-.5px}
+.kpi .val.pos{color:var(--green)}
+.kpi .val.neg{color:var(--red)}
+.kpi .val.blue{color:var(--blue)}
+.kpi .sub{font-size:.7rem;color:var(--gray);margin-top:3px}
+.kpi .badge{position:absolute;right:14px;top:14px;font-size:1.4rem;opacity:.15}
+
+/* ── Charts row ── */
+.charts-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:14px;padding:14px 28px 0}
+@media(max-width:900px){.charts-row{grid-template-columns:1fr}}
+.panel{background:var(--white);border-radius:10px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.panel h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;color:var(--gray);font-weight:700;margin-bottom:14px}
+.chart-box{position:relative}
+
+/* ── Bottom row ── */
+.bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 28px 28px}
+@media(max-width:700px){.bottom-row{grid-template-columns:1fr}}
+
+/* ── Outstanding bars ── */
+.out-item{margin-bottom:12px}
+.out-item:last-child{margin-bottom:0}
+.out-label{display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:4px}
+.out-label span:first-child{font-weight:600;color:#1a2b3c}
+.out-label span:last-child{color:var(--red);font-weight:700}
+.out-bar-bg{background:#f0f4f8;border-radius:4px;height:7px;overflow:hidden}
+.out-bar{background:var(--red);height:7px;border-radius:4px;transition:width .4s}
+
+/* ── Snapshot table ── */
+.snap-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.snap-table tr{border-bottom:1px solid var(--border)}
+.snap-table tr:last-child{border-bottom:none}
+.snap-table td{padding:7px 8px}
+.snap-table td:last-child{text-align:right;font-weight:600}
+.snap-table .section td{background:#f8fafc;font-weight:700;color:var(--navy);font-size:.75rem;text-transform:uppercase;letter-spacing:.3px}
+.snap-table .pos-val{color:var(--green)}
+.snap-table .neg-val{color:var(--red)}
+.snap-table .sub td:first-child{padding-left:20px;color:var(--gray)}
+.snap-table .divider td{padding:3px;background:transparent;border:none}
+
+/* Loading */
+.loader{text-align:center;padding:80px 28px;color:var(--gray)}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 14px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{background:var(--red-lt);border:1px solid #f1a8a8;border-radius:8px;padding:14px 18px;margin:20px 28px;color:var(--red);font-size:.85rem}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>☰ Internex — Cash Flow</h1>
+  <span class="synced" id="synced-label">Loading…</span>
+  <button class="refresh" onclick="loadData()">↻ Refresh</button>
+</div>
+<div class="month-bar" id="month-bar"></div>
+
+<div id="main-content">
+  <div class="loader"><div class="spinner"></div>Fetching live data…</div>
+</div>
+
+<script>
+var WEB_APP = "https://script.google.com/macros/s/AKfycbzyzj8ka6FcQi6KZRX28CAFaDOuYbDwLs1eTiasiuySqLJmQKd51B2Pd0YZR2C5T5Or/exec";
+
+var G = { headers:[], months:[], rows:{}, monthCols:{}, charts:{} };
+var selectedMonth = "TOTAL";
+
+function parseMYR(str){
+  if(!str||str==="")return 0;
+  var s=String(str).replace(/,/g,"").replace("RM","").trim();
+  if(s.startsWith("-"))return -parseFloat(s.slice(1))||0;
+  return parseFloat(s)||0;
+}
+function fmt(val,compact){
+  if(val===null||val===undefined)return"—";
+  var abs=Math.abs(val);
+  var s;
+  if(compact&&abs>=1000000)s="RM "+(abs/1000000).toFixed(2)+"M";
+  else if(compact&&abs>=1000)s="RM "+(abs/1000).toFixed(1)+"k";
+  else s="RM "+abs.toLocaleString("en-MY",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return val<0?"-"+s:s;
+}
+function colIdx(month){ return month==="TOTAL"?1:G.monthCols[month]; }
+
+function parseSheet(rows){
+  if(!rows||rows.length<2)return;
+  G.headers=rows[0];
+  G.months=[];
+  for(var i=2;i<G.headers.length;i++){
+    if(G.headers[i])G.months.push(G.headers[i]);
+    G.monthCols[G.headers[i]]=i;
+  }
+  G.rawRows=rows;
+  G.rows={};
+  G.subRows={};
+  var curSection=null;
+  for(var r=1;r<rows.length;r++){
+    var row=rows[r], lbl=row[0]||"";
+    var trimmed=lbl.trim();
+    if(!trimmed)continue;
+    if(lbl===trimmed){
+      G.rows[trimmed]=row;
+      curSection=trimmed;
+      G.subRows[trimmed]=[];
+    } else {
+      if(curSection&&G.subRows[curSection]){
+        G.subRows[curSection].push({label:trimmed,vals:row});
+      }
+    }
+  }
+}
+
+function getVal(label,month){
+  var row=G.rows[label];
+  if(!row)return 0;
+  return parseMYR(row[colIdx(month)]);
+}
+
+function getSubVals(section,month){
+  var subs=G.subRows[section]||[];
+  return subs.map(function(s){return{label:s.label,val:parseMYR(s.vals[colIdx(month)])};});
+}
+
+function buildMonthBar(){
+  var bar=document.getElementById("month-bar");
+  bar.innerHTML="";
+  function makeTab(label,cls){
+    var t=document.createElement("div");
+    t.className="mtab"+(cls?" "+cls:"")+(label===selectedMonth?" active":"");
+    t.textContent=label==="TOTAL"?"All Months":label;
+    t.onclick=function(){selectedMonth=label;buildMonthBar();renderDashboard();};
+    bar.appendChild(t);
+  }
+  makeTab("TOTAL","total-tab");
+  G.months.forEach(function(m){makeTab(m);});
+}
+
+function kpiHTML(label,val,cls,sub,badge){
+  var isNeg=val<0;
+  var valCls=isNeg?"neg":(cls==="red"?"neg":cls==="green"?"pos":cls==="blue"?"blue":"");
+  return '<div class="kpi '+cls+'"><label>'+label+'</label>'+
+    '<div class="val '+valCls+'">'+fmt(val,true)+'</div>'+
+    (sub?'<div class="sub">'+sub+'</div>':'')+
+    (badge?'<div class="badge">'+badge+'</div>':'')+
+    '</div>';
+}
+
+function destroyChart(id){if(G.charts[id]){G.charts[id].destroy();delete G.charts[id];}}
+
+function buildTrendChart(){
+  destroyChart("trend");
+  var months=G.months;
+  var collections=months.map(function(m){return getVal("Total Collection",m);});
+  var payables=months.map(function(m){return getVal("Total Payable",m);});
+  var payrolls=months.map(function(m){return getVal("Payroll",m);});
+  var fcf=months.map(function(m){return getVal("Free Cash Flow",m);});
+  var accum=months.map(function(m){return getVal("Accumulated Balance",m);});
+  var ctx=document.getElementById("chart-trend").getContext("2d");
+  G.charts.trend=new Chart(ctx,{
+    data:{
+      labels:months,
+      datasets:[
+        {type:"bar",label:"Collection",data:collections,backgroundColor:"rgba(26,156,90,.75)",borderRadius:4,order:2},
+        {type:"bar",label:"Payable",data:payables,backgroundColor:"rgba(231,76,60,.6)",borderRadius:4,order:2},
+        {type:"bar",label:"Payroll",data:payrolls,backgroundColor:"rgba(230,126,34,.6)",borderRadius:4,order:2},
+        {type:"line",label:"Free Cash Flow",data:fcf,borderColor:"#7d3c98",backgroundColor:"rgba(125,60,152,.08)",borderWidth:2.5,pointRadius:5,pointBackgroundColor:"#7d3c98",tension:.3,fill:true,order:1},
+        {type:"line",label:"Accum Balance",data:accum,borderColor:"#2471a3",borderWidth:2,pointRadius:4,pointBackgroundColor:"#2471a3",borderDash:[5,4],tension:.3,fill:false,order:1}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:"index",intersect:false},
+      plugins:{
+        legend:{position:"top",labels:{font:{size:11},boxWidth:12,padding:12}},
+        tooltip:{callbacks:{label:function(ctx){return" "+ctx.dataset.label+": "+fmt(ctx.raw);}}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:11}}},
+        y:{ticks:{callback:function(v){return fmt(v,true);},font:{size:10}},grid:{color:"#f0f4f8"}}
+      }
+    }
+  });
+}
+
+function buildOutflowPie(month){
+  destroyChart("outflow-pie");
+  var payableSubs=getSubVals("Total Payable",month).filter(function(s){return s.val>0;});
+  var payrollSubs=getSubVals("Payroll",month).filter(function(s){return s.val>0;});
+  var allItems=payableSubs.concat(payrollSubs);
+  if(!allItems.length)return;
+  var labels=allItems.map(function(s){return s.label;});
+  var vals=allItems.map(function(s){return s.val;});
+  var colors=["#e74c3c","#e67e22","#f39c12","#d35400","#c0392b","#7d3c98","#2471a3","#1a9c5a","#16a085","#2c3e50","#8e44ad","#3498db"];
+  var ctx=document.getElementById("chart-outflow").getContext("2d");
+  G.charts["outflow-pie"]=new Chart(ctx,{
+    type:"doughnut",
+    data:{labels:labels,datasets:[{data:vals,backgroundColor:colors.slice(0,labels.length),borderWidth:2,borderColor:"#fff"}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:"62%",
+      plugins:{
+        legend:{position:"right",labels:{font:{size:10},boxWidth:10,padding:8}},
+        tooltip:{callbacks:{label:function(c){return" "+c.label+": "+fmt(c.raw)+" ("+Math.round(c.parsed/c.dataset.data.reduce(function(a,b){return a+b;},0)*100)+"%)";}}}
+      }
+    }
+  });
+}
+
+function buildCollectionPie(month){
+  destroyChart("coll-pie");
+  var subs=getSubVals("Total Collection",month).filter(function(s){return s.val>0;});
+  if(!subs.length)return;
+  var labels=subs.map(function(s){return s.label;});
+  var vals=subs.map(function(s){return s.val;});
+  var colors=["#1a9c5a","#27ae60","#2ecc71","#16a085","#1abc9c","#48c774","#3cb371","#2471a3"];
+  var ctx=document.getElementById("chart-coll").getContext("2d");
+  G.charts["coll-pie"]=new Chart(ctx,{
+    type:"doughnut",
+    data:{labels:labels,datasets:[{data:vals,backgroundColor:colors.slice(0,labels.length),borderWidth:2,borderColor:"#fff"}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,cutout:"62%",
+      plugins:{
+        legend:{position:"right",labels:{font:{size:10},boxWidth:10,padding:8}},
+        tooltip:{callbacks:{label:function(c){return" "+c.label+": "+fmt(c.raw)+" ("+Math.round(c.parsed/c.dataset.data.reduce(function(a,b){return a+b;},0)*100)+"%)";}}}
+      }
+    }
+  });
+}
+
+function buildOutstandingPanel(month){
+  var larkSubs=getSubVals("Outstanding Payable",month);
+  var statutory=["EPF","SOCSO","EIS","PCB"];
+  var lark=larkSubs.filter(function(s){return statutory.indexOf(s.label)<0&&s.val>0;});
+  var stat=larkSubs.filter(function(s){return statutory.indexOf(s.label)>=0&&s.val>0;});
+  var all=[].concat(lark,stat).sort(function(a,b){return b.val-a.val;});
+  if(!all.length)return'<div style="color:var(--gray);font-size:.8rem;padding:16px 0;text-align:center">No outstanding obligations ✓</div>';
+  var total=all.reduce(function(s,i){return s+i.val;},0);
+  return all.map(function(item){
+    var pct=total>0?Math.round(item.val/total*100):0;
+    return'<div class="out-item">'+
+      '<div class="out-label"><span>'+item.label+'</span><span>'+fmt(item.val)+'</span></div>'+
+      '<div class="out-bar-bg"><div class="out-bar" style="width:'+pct+'%"></div></div>'+
+      '</div>';
+  }).join("");
+}
+
+function snapRow(label,val,cls,indent){
+  var numCls=val<0?"neg-val":val>0?"pos-val":"";
+  return'<tr class="'+(cls||"")+'"><td style="'+(indent?"padding-left:20px;color:var(--gray)":"")+'">'+label+'</td><td class="'+numCls+'">'+fmt(val)+'</td></tr>';
+}
+
+function buildSnapshot(month){
+  var rows=[];
+  rows.push('<tr class="section"><td colspan="2">Collection</td></tr>');
+  rows.push(snapRow("Total Collection",getVal("Total Collection",month)));
+  getSubVals("Total Collection",month).forEach(function(s){if(s.val)rows.push(snapRow(s.label,s.val,"sub",true));});
+  rows.push('<tr class="divider"><td colspan="2"></td></tr>');
+  rows.push('<tr class="section"><td colspan="2">Payments</td></tr>');
+  rows.push(snapRow("Total Payable",getVal("Total Payable",month)));
+  rows.push(snapRow("Payroll",getVal("Payroll",month)));
+  rows.push('<tr class="divider"><td colspan="2"></td></tr>');
+  rows.push('<tr class="section"><td colspan="2">Position</td></tr>');
+  rows.push(snapRow("Balance",getVal("Balance",month)));
+  rows.push(snapRow("Accum. Balance",getVal("Accumulated Balance",month)));
+  rows.push(snapRow("Outstanding",getVal("Outstanding Payable",month)));
+  rows.push(snapRow("Free Cash Flow",getVal("Free Cash Flow",month)));
+  return rows.join("");
+}
+
+function renderDashboard(){
+  var m=selectedMonth;
+  var coll=getVal("Total Collection",m);
+  var pay=getVal("Total Payable",m);
+  var payroll=getVal("Payroll",m);
+  var balance=getVal("Balance",m);
+  var accum=getVal("Accumulated Balance",m);
+  var out=getVal("Outstanding Payable",m);
+  var fcf=getVal("Free Cash Flow",m);
+  var totalOut=pay+payroll;
+  var collRate=totalOut>0?Math.round(coll/totalOut*100):0;
+  var monthLabel=m==="TOTAL"?"All Time":m;
+  var html=
+  '<div class="kpis">'+
+    kpiHTML("Free Cash Flow",fcf,fcf>=0?"green":"red","Net after all obligations","💵")+
+    kpiHTML("Accumulated Balance",accum,accum>=0?"blue":"red","Running cash position","📈")+
+    kpiHTML("Collection",coll,"green","Inflow — "+monthLabel,"⬆")+
+    kpiHTML("Total Outflow",totalOut,"red","Payable + Payroll","⬇")+
+    kpiHTML("Outstanding",out,"amber","Obligations still owed","⏳")+
+    kpiHTML("Coverage",coll&&totalOut?coll/totalOut*100:0,"navy",collRate+"% collection covers outflow","🎯")+
+  '</div>'+
+  '<div class="charts-row">'+
+    '<div class="panel"><h3>Monthly Cash Flow Trend</h3><div class="chart-box" style="height:240px"><canvas id="chart-trend"></canvas></div></div>'+
+    '<div class="panel"><h3>Where Money Goes — '+monthLabel+'</h3><div class="chart-box" style="height:240px"><canvas id="chart-outflow"></canvas></div></div>'+
+    '<div class="panel"><h3>Collection By Client — '+monthLabel+'</h3><div class="chart-box" style="height:240px"><canvas id="chart-coll"></canvas></div></div>'+
+  '</div>'+
+  '<div class="bottom-row">'+
+    '<div class="panel"><h3>Outstanding Obligations — '+monthLabel+'</h3>'+buildOutstandingPanel(m)+'</div>'+
+    '<div class="panel"><h3>Snapshot — '+monthLabel+'</h3><table class="snap-table"><tbody>'+buildSnapshot(m)+'</tbody></table></div>'+
+  '</div>';
+  document.getElementById("main-content").innerHTML=html;
+  buildTrendChart();
+  buildOutflowPie(m);
+  buildCollectionPie(m);
+}
+
+function loadData(){
+  document.getElementById("main-content").innerHTML='<div class="loader"><div class="spinner"></div>Fetching live data…</div>';
+  document.getElementById("month-bar").innerHTML="";
+  document.getElementById("synced-label").textContent="Loading…";
+  var cb="__gcb"+Date.now();
+  var s=document.createElement("script");
+  s.src=WEB_APP+"?callback="+cb;
+  s.onerror=function(){
+    document.getElementById("main-content").innerHTML='<div class="err">⚠️ Could not load data. Make sure you\'re signed into Google in this browser, then refresh.</div>';
+  };
+  window[cb]=function(data){
+    try{document.head.removeChild(s);}catch(e){}
+    delete window[cb];
+    var si=data.syncInfo||{};
+    document.getElementById("synced-label").textContent="Last synced: "+(si["Last Synced (MYT)"]||"—");
+    parseSheet(data.cashFlow||[]);
+    if(G.months.length) selectedMonth=G.months[G.months.length-1];
+    buildMonthBar();
+    renderDashboard();
+  };
+  document.head.appendChild(s);
+}
+
+loadData();
+</script>
+</body>
+</html>
